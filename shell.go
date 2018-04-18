@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os/user"
+	"strings"
 	"unicode/utf8"
 
 	tl "github.com/JoelOtter/termloop"
@@ -11,8 +12,7 @@ import (
 type Shell struct {
 	tl.Level
 	screen *tl.Screen
-	linum  int
-	ready  chan int // for blocking animations
+	ready  chan []*tl.Text // for blocking animations
 }
 
 func NewShell(screen *tl.Screen) *Shell {
@@ -20,22 +20,27 @@ func NewShell(screen *tl.Screen) *Shell {
 		Bg: DarkBG,
 	})
 
-	return &Shell{Level: l, ready: make(chan int)}
+	return &Shell{Level: l, ready: make(chan []*tl.Text), screen: screen}
 }
 
 func (s *Shell) Login() {
 
 	lines := GetStdOutLinesFromString(linuxLoginStdout, tl.ColorWhite, DarkBG, 0.1, func() float64 { return 1 })
 
-	s.AddEntity(NewStdOut(lines...).BlockUntil(s.ready))
+	stdoutLines := NewStdOut(lines...).BlockUntil(s.ready)
+	s.AddEntity(stdoutLines)
 
-	s.linum = <-s.ready
+	printedLines := <-s.ready
 
-	cmd := NewCmdLine(s.linum)
+	cmd := NewCmdLine(len(printedLines), s.screen)
+	cmd.execdLines = append(cmd.execdLines, printedLines...)
 	s.AddEntity(cmd)
+
+	s.RemoveEntity(stdoutLines) // idk why i have to do this lol -___-
 }
 
 type CmdLine struct {
+	screen       *tl.Screen
 	Username     string
 	Path         string
 	x            int
@@ -44,7 +49,7 @@ type CmdLine struct {
 	cursorXInCmd int
 	prefix       *tl.Text
 	cmd          *tl.Text
-	result       *tl.Text
+	results      []*tl.Text
 	Cursor       *tl.Cell
 	execdLines   []*tl.Text
 	cursorRate   float64
@@ -52,7 +57,7 @@ type CmdLine struct {
 	cursorOn     bool
 }
 
-func NewCmdLine(y int) *CmdLine {
+func NewCmdLine(y int, s *tl.Screen) *CmdLine {
 	// get currently logged in user
 	usr, err := user.Current()
 	if err != nil {
@@ -64,6 +69,7 @@ func NewCmdLine(y int) *CmdLine {
 	prefixLen := utf8.RuneCountInString(prefix) + 1
 
 	return &CmdLine{
+		screen:       s,
 		Username:     usr.Username,
 		Path:         "~",
 		x:            0,
@@ -72,7 +78,7 @@ func NewCmdLine(y int) *CmdLine {
 		cursorXInCmd: 0,
 		prefix:       tl.NewText(0, y, prefix, tl.ColorGreen, DarkBG),
 		cmd:          tl.NewText(prefixLen, y, "", tl.ColorWhite, DarkBG),
-		result:       nil,
+		results:      nil,
 		Cursor:       &tl.Cell{Fg: DarkBG, Bg: tl.ColorBlue, Ch: ' '},
 		execdLines:   []*tl.Text{},
 		cursorRate:   1,
@@ -114,7 +120,10 @@ func (c *CmdLine) Tick(event tl.Event) {
 				c.BackSpaceInput()
 			}
 		case tl.KeyCtrlC:
-			c.result = tl.NewText(0, 0, "hehe sorry", tl.ColorRed, DarkBG)
+			c.results = []*tl.Text{
+				tl.NewText(0, 0, "hehe sorry", tl.ColorRed, DarkBG),
+			}
+
 			c.Exec()
 		}
 
@@ -153,34 +162,92 @@ func (c *CmdLine) Draw(s *tl.Screen) {
 	s.RenderCell(c.cursorX+c.cursorXInCmd, c.y, c.Cursor)
 }
 
-func (c *CmdLine) Eval() *tl.Text {
-	// if there is already a result use that.
-	if c.result != nil {
-		c.y++
-		result := *c.result
-		result.SetPosition(0, c.y)
-		c.result = nil
-		return &result
+func (c *CmdLine) mvExecdLinesUp(n int) {
+	newExecdLines := []*tl.Text{}
+	for _, t := range c.execdLines {
+		_, y := t.Position()
+		if y < n-1 {
+			c.screen.RemoveEntity(t)
+		} else {
+			x := 0
+			if tx, _ := t.Position(); tx != 0 {
+				x = tx
+			}
+			t.SetPosition(x, y-n)
+			newExecdLines = append(newExecdLines, t)
+		}
 	}
 
-	// evaluate based on cmd ...
+	c.execdLines = newExecdLines
+}
 
-	return nil
+func (c *CmdLine) Eval() []*tl.Text {
+	var results = []*tl.Text{}
+
+	// if there is already a result use that.
+	if c.results != nil {
+		// copy ney array
+		for _, r := range c.results {
+			results = append(results, r)
+		}
+		c.results = nil
+	} else {
+		args := strings.Split(c.cmd.Text(), " ")
+
+		if len(args) == 0 {
+			return results
+		}
+
+		switch args[0] {
+		case "clear":
+			for _, l := range c.execdLines {
+				c.screen.RemoveEntity(l)
+			}
+			c.y = -1
+			c.execdLines = []*tl.Text{}
+		default:
+			return results
+		}
+		// evaluate based on cmd ...
+
+	}
+
+	// move stuff up after result (make room for new results in line feed)
+	_, h := c.screen.Size()
+	n := len(results)
+	if c.y+n > h-2 {
+		c.mvExecdLinesUp(n)
+		c.y -= n
+	}
+
+	// set results position in line feed
+	for _, r := range results {
+		c.y++
+		r.SetPosition(0, c.y)
+	}
+
+	return results
 }
 
 func (c *CmdLine) Exec() {
-	// evalute the cmd
-	result := c.Eval()
-	if result != nil {
-		// append result to execd lines
-		c.execdLines = append(c.execdLines, result)
-	}
-
 	// copy this line to execdLines
 	c.execdLines = append(c.execdLines, c.prefix, c.cmd)
 
+	// evalute the cmd
+	results := c.Eval()
+	if results != nil {
+		// append result to execd lines
+		c.execdLines = append(c.execdLines, results...)
+	}
+
 	// feed line
-	c.y++
+	_, h := c.screen.Size()
+	if c.y == h-2 {
+		c.mvExecdLinesUp(1)
+
+	} else {
+		c.y++ // TODO (cw|4.18.2018) results could be multi-line
+	}
 
 	// make new prefix and cmd
 	prefixLen := utf8.RuneCountInString(c.prefix.Text()) + 1

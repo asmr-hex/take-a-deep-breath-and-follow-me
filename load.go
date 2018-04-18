@@ -19,14 +19,14 @@ type StdOut struct {
 	feedTime    float64
 	disappear   bool
 	complete    bool
-	ready       chan int
+	ready       chan []*tl.Text
 }
 
 func NewStdOut(lines ...*StdOutLine) *StdOut {
 	return &StdOut{
 		Lines:    lines,
 		feedTime: MaxFeedTime * rand.Float64(),
-		ready:    make(chan int),
+		ready:    make(chan []*tl.Text),
 	}
 }
 
@@ -34,7 +34,7 @@ func (l *StdOut) DisappearOnEnd() {
 	l.disappear = true
 }
 
-func (l *StdOut) BlockUntil(ready chan int) *StdOut {
+func (l *StdOut) BlockUntil(ready chan []*tl.Text) *StdOut {
 	l.ready = ready
 
 	return l
@@ -47,7 +47,7 @@ func (l *StdOut) Draw(screen *tl.Screen) {
 	if l.idx == len(l.Lines) && l.elapsedTime > l.feedTime {
 		// we are done,
 		if !l.complete {
-			l.ready <- l.idx
+			l.ready <- l.Text()
 			l.complete = true
 		}
 		if l.disappear {
@@ -83,6 +83,15 @@ func (l *StdOut) DrawLines(idx int, s *tl.Screen) {
 	for _, line := range l.Lines[:idx] {
 		line.Draw(s)
 	}
+}
+
+func (l *StdOut) Text() []*tl.Text {
+	txt := []*tl.Text{}
+	for _, l := range l.Lines {
+		txt = append(txt, l.Text)
+	}
+
+	return txt
 }
 
 type StdOutLine struct {
