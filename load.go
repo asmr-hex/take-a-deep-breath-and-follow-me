@@ -18,12 +18,15 @@ type StdOut struct {
 	elapsedTime float64
 	feedTime    float64
 	disappear   bool
+	complete    bool
+	ready       chan int
 }
 
 func NewStdOut(lines ...*StdOutLine) *StdOut {
 	return &StdOut{
 		Lines:    lines,
 		feedTime: MaxFeedTime * rand.Float64(),
+		ready:    make(chan int),
 	}
 }
 
@@ -31,11 +34,22 @@ func (l *StdOut) DisappearOnEnd() {
 	l.disappear = true
 }
 
+func (l *StdOut) BlockUntil(ready chan int) *StdOut {
+	l.ready = ready
+
+	return l
+}
+
 func (l *StdOut) Draw(screen *tl.Screen) {
 	l.elapsedTime += screen.TimeDelta()
 
 	// when loader is complete, remove it from screen
 	if l.idx == len(l.Lines) && l.elapsedTime > l.feedTime {
+		// we are done,
+		if !l.complete {
+			l.ready <- l.idx
+			l.complete = true
+		}
 		if l.disappear {
 			screen.RemoveEntity(l)
 		} else {
