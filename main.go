@@ -8,6 +8,7 @@ func main() {
 	// initialize game
 	game := tl.NewGame()
 	game.Screen().SetFps(60)
+	game.SetEndKey(tl.KeyCtrlD) // 0xFF for an unreachable key
 	screen := game.Screen()
 
 	cemetery := BuildCemetery(screen)
