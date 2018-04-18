@@ -11,7 +11,7 @@ func main() {
 	screen := game.Screen()
 
 	cemetery := BuildCemetery(screen)
-	cemetery.Greet("boooo")
+	cemetery.Login()
 	// cemetery.EnterDreamer()
 	screen.SetLevel(cemetery)
 

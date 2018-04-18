@@ -7,16 +7,21 @@ import (
 	tl "github.com/JoelOtter/termloop"
 )
 
-type Cemetery struct {
-	*Shell
-	Screen *tl.Screen
+type Shell struct {
+	tl.Level
+	screen *tl.Screen
+	linum  int
 }
 
-func BuildCemetery(screen *tl.Screen) *Cemetery {
-	return &Cemetery{Shell: NewShell(screen), Screen: screen}
+func NewShell(screen *tl.Screen) *Shell {
+	l := tl.NewBaseLevel(tl.Cell{
+		Bg: DarkBG,
+	})
+
+	return &Shell{Level: l}
 }
 
-func (c *Cemetery) Greet(s string) {
+func (s *Shell) Login() {
 	// get currently logged in user
 	usr, err := user.Current()
 	if err != nil {
@@ -28,11 +33,5 @@ func (c *Cemetery) Greet(s string) {
 		NewStdOutLine(usr.Username+"@☠☠☠☠☠☠☠☠:~ $", tl.ColorGreen, DarkBG, 0.3),
 	)
 
-	txt := NewStdOut(lines...)
-	c.AddEntity(txt)
-}
-
-func (c *Cemetery) EnterDreamer() {
-	dreamer := NewDreamer(c.Screen)
-	c.AddEntity(dreamer)
+	s.AddEntity(NewStdOut(lines...))
 }
