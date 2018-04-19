@@ -12,11 +12,18 @@ func (c *CmdLine) clear(args []string) []*tl.Text {
 	return []*tl.Text{}
 }
 
+func (c *CmdLine) ls(args []string) []*tl.Text {
+	// get working dir
+
+	return []*tl.Text{}
+}
+
 func (c *CmdLine) EvalCmd(args []string) []*tl.Text {
 	var (
 		// add commands here for support
 		CMDS = map[string]func([]string) []*tl.Text{
 			"clear": c.clear,
+			"ls":    c.ls,
 		}
 		results = []*tl.Text{}
 	)
