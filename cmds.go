@@ -1,6 +1,8 @@
 package main
 
-import tl "github.com/JoelOtter/termloop"
+import (
+	tl "github.com/JoelOtter/termloop"
+)
 
 func (c *CmdLine) clear(args []string) []*tl.Text {
 	for _, l := range c.execdLines {
