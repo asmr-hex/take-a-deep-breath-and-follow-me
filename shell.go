@@ -194,22 +194,8 @@ func (c *CmdLine) Eval() []*tl.Text {
 	} else {
 		args := strings.Split(c.cmd.Text(), " ")
 
-		if len(args) == 0 {
-			return results
-		}
-
-		switch args[0] {
-		case "clear":
-			for _, l := range c.execdLines {
-				c.screen.RemoveEntity(l)
-			}
-			c.y = -1
-			c.execdLines = []*tl.Text{}
-		default:
-			return results
-		}
 		// evaluate based on cmd ...
-
+		results = c.EvalCmd(args)
 	}
 
 	// move stuff up after result (make room for new results in line feed)
